@@ -36,32 +36,50 @@ class Network:
 
     def __init__(self):
         ### TODO: Initialize any class variables desired ###
+        self.plugin = None
+        self.network = None
+        self.input_blob = None
+        self.output_blob = None
+        self.exec_network = None
+        self.infer_request = None
 
-    def load_model(self):
+    def load_model(self, model_xml, device="CPU"):
         ### TODO: Load the model ###
+        model_bin = os.path.splitext(model_xml)[0] + ".bin"
+        self.plugin = IECore()
+        self.network = IENetwork(model_xml, model_bin)
+
         ### TODO: Check for supported layers ###
+        supported_layers = self.plugin.query_network(self.network, device)
+        unsupported_layers = [l for l in self.network.layers.keys() if l not in supported_layers]
+        if (len(unsupported_layers) > 0):
+            print("ERROR: Unsupported layers found!")
+            exit(1)
+
+        ### DEPRECATED
         ### TODO: Add any necessary extensions ###
+
         ### TODO: Return the loaded inference plugin ###
-        ### Note: You may need to update the function parameters. ###
-        return
+        self.exec_network = self.plugin.load_network(self.network, device)
+
+        return self.plugin
 
     def get_input_shape(self):
         ### TODO: Return the shape of the input layer ###
-        return
+        return self.network.inputs[self.input_blob].shape
 
-    def exec_net(self):
+    def exec_net(self, image):
         ### TODO: Start an asynchronous request ###
         ### TODO: Return any necessary information ###
-        ### Note: You may need to update the function parameters. ###
-        return
+        infer_request = self.exec_network.start_async(0, {self.input_blob: image})
+        return infer_request
 
     def wait(self):
         ### TODO: Wait for the request to be complete. ###
         ### TODO: Return any necessary information ###
-        ### Note: You may need to update the function parameters. ###
-        return
+        status = self.exec_network.requests[0].wait(-1)
+        return status
 
     def get_output(self):
         ### TODO: Extract and return the output results
-        ### Note: You may need to update the function parameters. ###
-        return
+        return self.exec_network.requests[0].outputs[self.output_blob]

@@ -70,7 +70,8 @@ def build_argparser():
 
 def connect_mqtt():
     ### TODO: Connect to the MQTT client ###
-    client = None
+    client = mqtt.Client()
+    client.connect(MQTT_HOST, MQTT_PORT, MQTT_KEEPALIVE_INTERVAL)
 
     return client
 
@@ -89,21 +90,44 @@ def infer_on_stream(args, client):
     # Set Probability threshold for detections
     prob_threshold = args.prob_threshold
 
+    model_xml = args.m
+    device = args.d
+    input = args.i
+
     ### TODO: Load the model through `infer_network` ###
+    infer_network.load_model(model_xml, device)
+    network_input_shape = infer_network.get_input_shape()
 
     ### TODO: Handle the input stream ###
+    cap = cv2.VideoCapture(input)
+    cap.open(input)
+
+    input_width = int(cap.get(3))
+    input_height = int(cap.get(4))
 
     ### TODO: Loop until stream is over ###
+    while(cap.isOpened()):
 
         ### TODO: Read from the video capture ###
+        flag, frame = cap.read()
+        if not flag:
+            break
+
+        key_pressed = cv2.waitkey(60)
 
         ### TODO: Pre-process the image as needed ###
+        p_frame = cv2.resize(frame, (network_input_shape[3], network_input_shape[2]))
+        p_frame = p_frame.transpose((2, 0, 1))
+        p_frame = p_frame.reshape(1, *p_frame.shape)
 
         ### TODO: Start asynchronous inference for specified request ###
+        infer_network.exec_net(p_frame)
 
         ### TODO: Wait for the result ###
+        if infer_network.wait() == 0:
 
             ### TODO: Get the results of the inference request ###
+            result = infer_network.get_output()
 
             ### TODO: Extract any desired stats from the results ###
 
@@ -115,6 +139,11 @@ def infer_on_stream(args, client):
         ### TODO: Send the frame to the FFMPEG server ###
 
         ### TODO: Write an output image if `single_image_mode` ###
+
+    ### Release resources
+    cap.release()
+    cv2.destroyAllWindows()
+    client.disconnect()    
 
 
 def main():
