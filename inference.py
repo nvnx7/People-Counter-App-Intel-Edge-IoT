@@ -62,6 +62,9 @@ class Network:
         ### TODO: Return the loaded inference plugin ###
         self.exec_network = self.plugin.load_network(self.network, device)
 
+        self.input_blob = next(iter(self.network.inputs))
+        self.output_blob = next(iter(self.network.outputs))
+
         return self.plugin
 
     def get_input_shape(self):

@@ -90,9 +90,9 @@ def infer_on_stream(args, client):
     # Set Probability threshold for detections
     prob_threshold = args.prob_threshold
 
-    model_xml = args.m
-    device = args.d
-    input = args.i
+    model_xml = args.model
+    device = args.device
+    input = args.input
 
     ### TODO: Load the model through `infer_network` ###
     infer_network.load_model(model_xml, device)
@@ -105,6 +105,8 @@ def infer_on_stream(args, client):
     input_width = int(cap.get(3))
     input_height = int(cap.get(4))
 
+    total_count = 0
+
     ### TODO: Loop until stream is over ###
     while(cap.isOpened()):
 
@@ -113,7 +115,7 @@ def infer_on_stream(args, client):
         if not flag:
             break
 
-        key_pressed = cv2.waitkey(60)
+        key_pressed = cv2.waitKey(60)
 
         ### TODO: Pre-process the image as needed ###
         p_frame = cv2.resize(frame, (network_input_shape[3], network_input_shape[2]))
@@ -127,14 +129,20 @@ def infer_on_stream(args, client):
         if infer_network.wait() == 0:
 
             ### TODO: Get the results of the inference request ###
-            result = infer_network.get_output()
+            output = infer_network.get_output()
 
             ### TODO: Extract any desired stats from the results ###
+            current_count = output.shape[2]
 
             ### TODO: Calculate and send relevant information on ###
             ### current_count, total_count and duration to the MQTT server ###
             ### Topic "person": keys of "count" and "total" ###
             ### Topic "person/duration": key of "duration" ###
+            total_count += current_count
+
+            client.publish("person", json.dumps({"count": current_count, "total": total_count}))
+            client.publish("person/duration", json.dumps({"duration": 5}))
+
 
         ### TODO: Send the frame to the FFMPEG server ###
 
