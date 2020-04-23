@@ -75,6 +75,21 @@ def connect_mqtt():
 
     return client
 
+def draw_boxes(frame, output, conf_threshold, width, height):
+    color = (255, 0, 0)
+    count = 0
+
+    for box in output[0][0]:
+        conf = box[2]
+        if conf >= conf_threshold:
+            xmin = int(box[3] * width)
+            ymin = int(box[4] * height)
+            xmax = int(box[5] * width)
+            ymax = int(box[6] * height)
+            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 1)
+            count += 1
+    
+    return frame, count
 
 def infer_on_stream(args, client):
     """
@@ -106,6 +121,7 @@ def infer_on_stream(args, client):
     input_height = int(cap.get(4))
 
     total_count = 0
+    out = cv2.VideoWriter("test_out.mp4", 0x7634706d, 30, (input_width, input_height))
 
     ### TODO: Loop until stream is over ###
     while(cap.isOpened()):
@@ -131,8 +147,13 @@ def infer_on_stream(args, client):
             ### TODO: Get the results of the inference request ###
             output = infer_network.get_output()
 
+            if len(output[0][0]) != 0:
+                print("ImageId: " + str(output[0][0][0][0]) + " Label: " + str(output[0][0][0][1]))
+
+            # out.write(frame)
+
             ### TODO: Extract any desired stats from the results ###
-            current_count = output.shape[2]
+            _, current_count = draw_boxes(frame, output, prob_threshold, input_width, input_height)
 
             ### TODO: Calculate and send relevant information on ###
             ### current_count, total_count and duration to the MQTT server ###
@@ -150,6 +171,7 @@ def infer_on_stream(args, client):
 
     ### Release resources
     cap.release()
+    out.release()
     cv2.destroyAllWindows()
     client.disconnect()    
 
