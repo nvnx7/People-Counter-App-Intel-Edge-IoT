@@ -26,6 +26,7 @@ import time
 import socket
 import json
 import cv2
+from collections import deque
 
 import logging as log
 import paho.mqtt.client as mqtt
@@ -120,7 +121,19 @@ def infer_on_stream(args, client):
     input_width = int(cap.get(3))
     input_height = int(cap.get(4))
 
+    # Total no of people couted
     total_count = 0
+
+    # To store past value of "current_count"
+    last_count_value = 0
+
+    # No of consecutive frames when inference yiels same result for "current_count"
+    same_count_streak = 0
+
+    # Last value of "current_count" when there was consecutive same value for
+    # "current_count" variable for at least 5 times
+    last_streak_count_value = 0
+    
     out = cv2.VideoWriter("test_out.mp4", 0x7634706d, 30, (input_width, input_height))
 
     ### TODO: Loop until stream is over ###
@@ -147,25 +160,48 @@ def infer_on_stream(args, client):
             ### TODO: Get the results of the inference request ###
             output = infer_network.get_output()
 
-            if len(output[0][0]) != 0:
-                print("ImageId: " + str(output[0][0][0][0]) + " Label: " + str(output[0][0][0][1]))
-
-            # out.write(frame)
-
             ### TODO: Extract any desired stats from the results ###
-            _, current_count = draw_boxes(frame, output, prob_threshold, input_width, input_height)
+            out_frame, current_count = draw_boxes(frame, output, prob_threshold, input_width, input_height)
+            
+            out.write(out_frame)
+
+            if (last_count_value == current_count):
+                # Increment streak if same value observed
+                same_count_streak += 1
+            else:
+                # Reset if different value observed
+                same_count_streak = 0
+
+            last_count_value = current_count
 
             ### TODO: Calculate and send relevant information on ###
             ### current_count, total_count and duration to the MQTT server ###
             ### Topic "person": keys of "count" and "total" ###
             ### Topic "person/duration": key of "duration" ###
-            total_count += current_count
+
+            # Unless same 5 values are observed, do not add to total
+            # This is to avoid miscounting due to momentarily
+            # random false low predictions
+            if (same_count_streak == 5):
+
+                # Add only if additional people are detected in frame.
+                # Not when partial no of people get out of frame
+                if (last_streak_count_value <= current_count):
+                    total_count += current_count - last_streak_count_value
+                    last_streak_count_value = current_count
+
+                # Set last streak count's value to current value    
+                last_streak_count_value = current_count
+
+            print("Count: " + str(current_count) + "  Total: " + str(total_count) + " Last Val: " + str(last_streak_count_value))
 
             client.publish("person", json.dumps({"count": current_count, "total": total_count}))
-            client.publish("person/duration", json.dumps({"duration": 5}))
+            # client.publish("person/duration", json.dumps({"duration": 5}))
 
 
         ### TODO: Send the frame to the FFMPEG server ###
+        # sys.stdout.buffer.write(out_frame)
+        # sys.stdout.flush()
 
         ### TODO: Write an output image if `single_image_mode` ###
 
