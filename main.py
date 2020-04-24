@@ -133,6 +133,12 @@ def infer_on_stream(args, client):
     # Last value of "current_count" when there was consecutive same value for
     # "current_count" variable for at least 5 times
     last_streak_count_value = 0
+
+    # To store start time of event when at least one person appears in frame
+    start_time = 0
+
+    # Duration during which at least one person is in frame
+    duration = 0
     
     out = cv2.VideoWriter("test_out.mp4", 0x7634706d, 30, (input_width, input_height))
 
@@ -170,7 +176,7 @@ def infer_on_stream(args, client):
                 same_count_streak += 1
             else:
                 # Reset if different value observed
-                same_count_streak = 0
+                same_count_streak = 1
 
             last_count_value = current_count
 
@@ -188,12 +194,28 @@ def infer_on_stream(args, client):
                 # Not when partial no of people get out of frame
                 if (last_streak_count_value <= current_count):
                     total_count += current_count - last_streak_count_value
-                    last_streak_count_value = current_count
+
+                # If at least one person appears in frame while there were none,
+                # initiate a new start_time
+                if (current_count != 0 and last_streak_count_value == 0):
+                    start_time = time.time()
+
+                # Else reset start_time if frame contains no person at the time
+                elif (current_count == 0):
+                    start_time = 0
 
                 # Set last streak count's value to current value    
                 last_streak_count_value = current_count
+            
+            # If there are people in frame calculate duration
+            if (start_time != 0):
+                duration = round(time.time() - start_time, 2)
+            
+            # Else set duration to 0
+            else:
+                duration = 0
 
-            print("Count: " + str(current_count) + "  Total: " + str(total_count) + " Last Val: " + str(last_streak_count_value))
+            print("Count: " + str(current_count) + "  Total: " + str(total_count) + " Start: " + str(start_time) + " Duration: " + str(duration) + "   Last Val: " + str(last_streak_count_value))
 
             client.publish("person", json.dumps({"count": current_count, "total": total_count}))
             # client.publish("person/duration", json.dumps({"duration": 5}))
