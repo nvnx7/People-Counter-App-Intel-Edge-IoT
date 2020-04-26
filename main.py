@@ -41,6 +41,10 @@ MQTT_HOST = IPADDRESS
 MQTT_PORT = 3001
 MQTT_KEEPALIVE_INTERVAL = 60
 
+# File formats
+IMAGE_EXTENSIONS = [".bmp", ".jpeg", ".jpg", ".png", ".webp", ".tiff", ".tif"]
+VIDEO_EXTENSIONS = []
+
 
 def build_argparser():
     """
@@ -76,6 +80,12 @@ def connect_mqtt():
 
     return client
 
+def preprocess(input, net_input_shape):
+    p_input = cv2.resize(input, (net_input_shape[3], net_input_shape[2]))
+    p_input = p_input.transpose((2, 0, 1))
+    p_input = p_input.reshape(1, *p_input.shape)
+    return p_input
+
 def draw_boxes(frame, output, conf_threshold, width, height):
     color = (255, 0, 0)
     count = 0
@@ -91,6 +101,11 @@ def draw_boxes(frame, output, conf_threshold, width, height):
             count += 1
     
     return frame, count
+
+def get_file_extension(path_string):
+    filename = os.path.basename(path_string)
+    _, ext = os.path.splitext(filename)
+    return ext
 
 def infer_on_stream(args, client):
     """
@@ -115,6 +130,25 @@ def infer_on_stream(args, client):
     network_input_shape = infer_network.get_input_shape()
 
     ### TODO: Handle the input stream ###
+    file_ext = get_file_extension(input).lower()
+    
+    if (file_ext in IMAGE_EXTENSIONS):
+        print("Image file fed.")
+        
+        # Read and preprocess image
+        image = cv2.imread(input)
+        height, width, _ = image.shape
+        p_image = preprocess(image, network_input_shape)
+
+        # Infer and draw boxes, then save as .jpg
+        infer_network.exec_net(p_image)
+        if infer_network.wait() == 0:
+            output = infer_network.get_output()
+            out_image, _ = draw_boxes(image, output, prob_threshold, width, height)
+            cv2.imwrite("test_out.jpg", out_image)
+        return
+    
+
     cap = cv2.VideoCapture(input)
     cap.open(input)
 
@@ -150,12 +184,10 @@ def infer_on_stream(args, client):
         if not flag:
             break
 
-        key_pressed = cv2.waitKey(60)
+        # key_pressed = cv2.waitKey(60)
 
         ### TODO: Pre-process the image as needed ###
-        p_frame = cv2.resize(frame, (network_input_shape[3], network_input_shape[2]))
-        p_frame = p_frame.transpose((2, 0, 1))
-        p_frame = p_frame.reshape(1, *p_frame.shape)
+        p_frame = preprocess(frame, network_input_shape)
 
         ### TODO: Start asynchronous inference for specified request ###
         infer_network.exec_net(p_frame)
@@ -218,7 +250,7 @@ def infer_on_stream(args, client):
             print("Count: " + str(current_count) + "  Total: " + str(total_count) + " Start: " + str(start_time) + " Duration: " + str(duration) + "   Last Val: " + str(last_streak_count_value))
 
             client.publish("person", json.dumps({"count": current_count, "total": total_count}))
-            # client.publish("person/duration", json.dumps({"duration": 5}))
+            client.publish("person/duration", json.dumps({"duration": duration}))
 
 
         ### TODO: Send the frame to the FFMPEG server ###
