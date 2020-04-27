@@ -43,7 +43,7 @@ MQTT_KEEPALIVE_INTERVAL = 60
 
 # File formats
 IMAGE_EXTENSIONS = [".bmp", ".jpeg", ".jpg", ".png", ".webp", ".tiff", ".tif"]
-VIDEO_EXTENSIONS = []
+VIDEO_EXTENSIONS = [".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm"]
 
 
 def build_argparser():
@@ -129,9 +129,13 @@ def infer_on_stream(args, client):
     infer_network.load_model(model_xml, device)
     network_input_shape = infer_network.get_input_shape()
 
+    # Initialize variable for VideoCapture
+    cap = None
+
     ### TODO: Handle the input stream ###
     file_ext = get_file_extension(input).lower()
-    
+
+    # If input is an image file
     if (file_ext in IMAGE_EXTENSIONS):
         print("Image file fed.")
         
@@ -146,10 +150,22 @@ def infer_on_stream(args, client):
             output = infer_network.get_output()
             out_image, _ = draw_boxes(image, output, prob_threshold, width, height)
             cv2.imwrite("test_out.jpg", out_image)
-        return
-    
 
-    cap = cv2.VideoCapture(input)
+        # Do not proceed
+        return
+
+    elif (file_ext in VIDEO_EXTENSIONS):
+        cap = cv2.VideoCapture(input)
+    
+    elif (input.lower() == "cam"):
+        input = 0
+        cap = cv2.VideoCapture(input)
+    
+    else:
+        print("ERROR: Unsupported input provided!")
+        print("Please provide a valid image or video file, or 'cam' for camera feed")
+        sys.exit(1)
+
     cap.open(input)
 
     input_width = int(cap.get(3))
@@ -184,7 +200,13 @@ def infer_on_stream(args, client):
         if not flag:
             break
 
-        # key_pressed = cv2.waitKey(60)
+        # Break stream if Esc key is pressed
+        if cv2.waitKey(1) == 27:
+            break
+
+        # Display input if read from camera
+        if input == 0:
+            cv2.imshow("input", frame)
 
         ### TODO: Pre-process the image as needed ###
         p_frame = preprocess(frame, network_input_shape)
