@@ -26,7 +26,6 @@ import time
 import socket
 import json
 import cv2
-from collections import deque
 
 import logging as log
 import paho.mqtt.client as mqtt
@@ -81,6 +80,7 @@ def connect_mqtt():
     return client
 
 def preprocess(input, net_input_shape):
+    # print("NETWORK_INP_SIZE: " + str(net_input_shape))
     p_input = cv2.resize(input, (net_input_shape[3], net_input_shape[2]))
     p_input = p_input.transpose((2, 0, 1))
     p_input = p_input.reshape(1, *p_input.shape)
@@ -99,6 +99,16 @@ def draw_boxes(frame, output, conf_threshold, width, height):
             ymax = int(box[6] * height)
             cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 1)
             count += 1
+            print("Count: " + str(count) + " Conf: " + str(conf))
+            cv2.imwrite(os.path.join("./img", str(count)+".jpg"), frame)
+    # box = output[0][0][0]
+    # conf = box[2]
+    # if conf >= conf_threshold:
+    #     xmin = int(box[3] * width)
+    #     ymin = int(box[4] * height)
+    #     xmax = int(box[5] * width)
+    #     ymax = int(box[6] * height)
+    #     cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 1)
     
     return frame, count
 
@@ -148,6 +158,7 @@ def infer_on_stream(args, client):
         infer_network.exec_net(p_image)
         if infer_network.wait() == 0:
             output = infer_network.get_output()
+            # print("Output " + str(output[0][0][2]))
             out_image, _ = draw_boxes(image, output, prob_threshold, width, height)
             cv2.imwrite("test_out.jpg", out_image)
 
@@ -252,7 +263,7 @@ def infer_on_stream(args, client):
                 # If at least one person appears in frame while there were none,
                 # initiate a new start_time
                 if (current_count != 0 and last_streak_count_value == 0):
-                    start_time = time.time()
+                    start_time = cap.get(cv2.CAP_PROP_POS_MSEC) #time.time()
 
                 # Else reset start_time if frame contains no person at the time
                 elif (current_count == 0):
@@ -263,13 +274,13 @@ def infer_on_stream(args, client):
             
             # If there are people in frame calculate duration
             if (start_time != 0):
-                duration = round(time.time() - start_time, 2)
+                duration = round(cap.get(cv2.CAP_PROP_POS_MSEC) - start_time, 2)
             
             # Else set duration to 0
             else:
                 duration = 0
 
-            print("Count: " + str(current_count) + "  Total: " + str(total_count) + " Start: " + str(start_time) + " Duration: " + str(duration) + "   Last Val: " + str(last_streak_count_value))
+            print("Count: " + str(current_count) + "  Total: " + str(total_count) + " Start: " + str(cap.get(cv2.CAP_PROP_POS_MSEC)))# + " Duration: " + str(duration) + "   Last Val: " + str(last_streak_count_value))
 
             client.publish("person", json.dumps({"count": current_count, "total": total_count}))
             client.publish("person/duration", json.dumps({"duration": duration}))

@@ -61,7 +61,7 @@ class Network:
 
         ### TODO: Return the loaded inference plugin ###
         self.exec_network = self.plugin.load_network(self.network, device)
-        print("EXEC_NET INPUTS: " + str(self.network.outputs["DetectionOutput"].shape))
+        # print("EXEC_NET INPUTS: " + str(self.network.outputs["detection_output"].shape))
         self.input_blob = next(iter(self.network.inputs)) # "image_tensor" #next(iter(self.network.inputs))
         self.output_blob = next(iter(self.network.outputs)) # "detection_output"  #next(iter(self.network.outputs))
 
