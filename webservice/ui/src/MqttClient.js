@@ -3,7 +3,7 @@ import { MQTT } from "./constants/constants";
 
 class MqttClient {
   constructor() {
-
+    console.log("Trying to connect to mqtt server at " + MQTT.MQTT_SERVER )
     // connect to mqtt server
     this.client = mqtt.connect( MQTT.MQTT_SERVER );
 
@@ -13,13 +13,12 @@ class MqttClient {
     // listen for successful connection
     this.client.on( "connect", () => {
       // subscribe to every possible topic
+      console.log( "connected to " + MQTT.MQTT_SERVER );
       this.client.subscribe( MQTT.TOPICS.PERSON );
       this.client.subscribe( MQTT.TOPICS.DURATION );
       this.publish( "presence", "hello from react" );
-
-      console.log( "connected to " + MQTT.MQTT_SERVER );
     } );
-
+    
     // listen for mqtt messages
     this.client.on( "message", ( topic, message ) => {
       /*console.log( topic, message );*/

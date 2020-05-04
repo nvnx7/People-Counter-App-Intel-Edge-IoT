@@ -22,7 +22,6 @@
 
 import os
 import sys
-import time
 import socket
 import json
 import cv2
@@ -73,14 +72,13 @@ def build_argparser():
 
 
 def connect_mqtt():
-    ### TODO: Connect to the MQTT client ###
+    ### Connect to the MQTT client
     client = mqtt.Client()
     client.connect(MQTT_HOST, MQTT_PORT, MQTT_KEEPALIVE_INTERVAL)
 
     return client
 
 def preprocess(input, net_input_shape):
-    # print("NETWORK_INP_SIZE: " + str(net_input_shape))
     p_input = cv2.resize(input, (net_input_shape[3], net_input_shape[2]))
     p_input = p_input.transpose((2, 0, 1))
     p_input = p_input.reshape(1, *p_input.shape)
@@ -99,16 +97,6 @@ def draw_boxes(frame, output, conf_threshold, width, height):
             ymax = int(box[6] * height)
             cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 1)
             count += 1
-            print("Count: " + str(count) + " Conf: " + str(conf))
-            cv2.imwrite(os.path.join("./img", str(count)+".jpg"), frame)
-    # box = output[0][0][0]
-    # conf = box[2]
-    # if conf >= conf_threshold:
-    #     xmin = int(box[3] * width)
-    #     ymin = int(box[4] * height)
-    #     xmax = int(box[5] * width)
-    #     ymax = int(box[6] * height)
-    #     cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 1)
     
     return frame, count
 
@@ -135,14 +123,14 @@ def infer_on_stream(args, client):
     device = args.device
     input = args.input
 
-    ### TODO: Load the model through `infer_network` ###
+    ### Load the model through `infer_network`
     infer_network.load_model(model_xml, device)
     network_input_shape = infer_network.get_input_shape()
 
     # Initialize variable for VideoCapture
     cap = None
 
-    ### TODO: Handle the input stream ###
+    ### Handle the input stream
     file_ext = get_file_extension(input).lower()
 
     # If input is an image file
@@ -158,9 +146,8 @@ def infer_on_stream(args, client):
         infer_network.exec_net(p_image)
         if infer_network.wait() == 0:
             output = infer_network.get_output()
-            # print("Output " + str(output[0][0][2]))
             out_image, _ = draw_boxes(image, output, prob_threshold, width, height)
-            cv2.imwrite("test_out.jpg", out_image)
+            cv2.imwrite("out.jpg", out_image)
 
         # Do not proceed
         return
@@ -196,17 +183,18 @@ def infer_on_stream(args, client):
     last_streak_count_value = 0
 
     # To store start time of event when at least one person appears in frame
-    start_time = 0
+    start_time = None
 
     # Duration during which at least one person is in frame
     duration = 0
-    
-    out = cv2.VideoWriter("test_out.mp4", 0x7634706d, 30, (input_width, input_height))
 
-    ### TODO: Loop until stream is over ###
+    # Determine if a person completed a duration by exiting out of the frame
+    is_duration_complete = False
+
+    ### Loop until stream is over
     while(cap.isOpened()):
 
-        ### TODO: Read from the video capture ###
+        ### Read from the video capture 
         flag, frame = cap.read()
         if not flag:
             break
@@ -219,22 +207,20 @@ def infer_on_stream(args, client):
         if input == 0:
             cv2.imshow("input", frame)
 
-        ### TODO: Pre-process the image as needed ###
+        ### Pre-process the image as needed 
         p_frame = preprocess(frame, network_input_shape)
 
-        ### TODO: Start asynchronous inference for specified request ###
+        ### Start asynchronous inference for specified request
         infer_network.exec_net(p_frame)
 
-        ### TODO: Wait for the result ###
+        ### Wait for the result
         if infer_network.wait() == 0:
 
-            ### TODO: Get the results of the inference request ###
+            ### Get the results of the inference request
             output = infer_network.get_output()
 
-            ### TODO: Extract any desired stats from the results ###
+            ### Extract any desired stats from the results
             out_frame, current_count = draw_boxes(frame, output, prob_threshold, input_width, input_height)
-            
-            out.write(out_frame)
 
             if (last_count_value == current_count):
                 # Increment streak if same value observed
@@ -245,7 +231,7 @@ def infer_on_stream(args, client):
 
             last_count_value = current_count
 
-            ### TODO: Calculate and send relevant information on ###
+            ### Calculate and send relevant information on ###
             ### current_count, total_count and duration to the MQTT server ###
             ### Topic "person": keys of "count" and "total" ###
             ### Topic "person/duration": key of "duration" ###
@@ -261,40 +247,39 @@ def infer_on_stream(args, client):
                     total_count += current_count - last_streak_count_value
 
                 # If at least one person appears in frame while there were none,
-                # initiate a new start_time
+                # initiate a new start_time with timestamp of current frame
                 if (current_count != 0 and last_streak_count_value == 0):
-                    start_time = cap.get(cv2.CAP_PROP_POS_MSEC) #time.time()
+                    start_time = cap.get(cv2.CAP_PROP_POS_MSEC)
 
-                # Else reset start_time if frame contains no person at the time
+                # Else reset start_time if frame contains no person at the time and 
+                # and set is_duration_complete to True, if current count changed from non-zero to 0 value,
+                # as duration is completed then for person in frame
                 elif (current_count == 0):
-                    start_time = 0
+                    start_time = None
+                    if last_streak_count_value != 0:
+                        is_duration_complete = True
 
                 # Set last streak count's value to current value    
                 last_streak_count_value = current_count
             
-            # If there are people in frame calculate duration
-            if (start_time != 0):
-                duration = round(cap.get(cv2.CAP_PROP_POS_MSEC) - start_time, 2)
-            
-            # Else set duration to 0
-            else:
-                duration = 0
-
-            print("Count: " + str(current_count) + "  Total: " + str(total_count) + " Start: " + str(cap.get(cv2.CAP_PROP_POS_MSEC)))# + " Duration: " + str(duration) + "   Last Val: " + str(last_streak_count_value))
+            # If there are people in frame calculate duration in seconds
+            if (not start_time is None):
+                duration = round((cap.get(cv2.CAP_PROP_POS_MSEC) - start_time)/1000.0, 2)
 
             client.publish("person", json.dumps({"count": current_count, "total": total_count}))
-            client.publish("person/duration", json.dumps({"duration": duration}))
+            # If a duration completed publish it and set duration to 0 and is_duration_complete to False
+            if is_duration_complete:
+                client.publish("person/duration", json.dumps({"duration": duration}))
+                is_duration_complete = False
+                duration = 0
 
 
-        ### TODO: Send the frame to the FFMPEG server ###
-        # sys.stdout.buffer.write(out_frame)
-        # sys.stdout.flush()
-
-        ### TODO: Write an output image if `single_image_mode` ###
+        ### Send the frame to the FFMPEG server ###
+        sys.stdout.buffer.write(out_frame)
+        sys.stdout.flush()
 
     ### Release resources
     cap.release()
-    out.release()
     cv2.destroyAllWindows()
     client.disconnect()    
 
