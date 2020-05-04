@@ -62,6 +62,7 @@ However, in investigating potential people counter models, I tried each of the f
   `python3 /opt/intel/openvino/deployment_tools/model_optimizer/mo.py --input_model frozen_inference_graph.pb --tensorflow_object_detection_api_pipeline_config pipeline.config --reverse_input_channels --transformations_config /opt/intel/openvino/deployment_tools/model_optimizer/extensions/front/tf/ssd_v2_support.json -o ./ir`
   - The model was insufficient for the app because it failed to detect boxes at particular time with significant consecutive frames (when person wore dark attire). This produced error in the stats calculation.
   - Efforts were made to improve accuracy by passing `float` as `--data_type` arg as well as specifying `disable_weights_compression` arg, with no noticeable change.
+  Lowering probability threshold didn't work either.
   
 - Model 2: Faster RCNN Inception V2
   - Link: https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/detection_model_zoo.md
@@ -74,3 +75,4 @@ However, in investigating potential people counter models, I tried each of the f
   - Following command was used to convert to IR:<br>
   `python3 /opt/intel/openvino/deployment_tools/model_optimizer/mo.py --input_model frozen_inference_graph.pb --tensorflow_object_detection_api_pipeline_config pipeline.config --reverse_input_channels --transformations_config /opt/intel/openvino/deployment_tools/model_optimizer/extensions/front/tf/ssd_support.json -o ./ir`
   - The model detected a person accurately, but also tries to detect unnecessary stuff with probability >0.5, which leads to hardship in detecting and counting only humans.
+  - Adjusting the probability threshold to multiple values produced other negative side effects, so it wasn't sufficiently satisfactory for the app.
